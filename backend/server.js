@@ -1,4 +1,3 @@
-// backend/server.js
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
@@ -6,8 +5,9 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const { getPlanByAmount } = require("./plans");
-const { grantWifiAccess } = require("./router");
+// const { grantWifiAccess } = require("./router"); // Router integration disabled
 const Transaction = require("./Transaction");
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -18,8 +18,11 @@ const requiredEnv = [
   "MPESA_CONSUMER_SECRET",
   "MPESA_PASSKEY",
   "MPESA_BUSINESS_SHORTCODE",
-  "MPESA_CALLBACK_URL"
+  "MPESA_CALLBACK_URL",
+  "MONGO_URI"
+  // Router variables are optional for now
 ];
+
 for (const env of requiredEnv) {
   if (!process.env[env]) {
     console.error(`❌ Missing environment variable: ${env}`);
@@ -28,8 +31,7 @@ for (const env of requiredEnv) {
 }
 
 // ---------- MongoDB connection ----------
-const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/wifi_hotspot";
-mongoose.connect(mongoURI)
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch(err => {
     console.error("❌ MongoDB connection error:", err);
@@ -64,7 +66,7 @@ const formatPhoneNumber = (phone) => {
 
 // ---------- Routes ----------
 app.post("/stkpush", async (req, res) => {
-  const { phone, amount, plan, mac } = req.body; // mac is optional (from URL query)
+  const { phone, amount, plan, mac } = req.body;
   console.log("📥 Payment request:", { phone, amount, plan, mac });
 
   try {
@@ -98,7 +100,6 @@ app.post("/stkpush", async (req, res) => {
 
     console.log("✅ STK Push sent:", response.data);
 
-    // Save transaction to database
     if (response.data.CheckoutRequestID) {
       const transaction = new Transaction({
         checkoutRequestID: response.data.CheckoutRequestID,
@@ -140,7 +141,7 @@ app.post("/mpesa-callback", async (req, res) => {
   // Always acknowledge M-Pesa immediately
   res.json({ ResultCode: 0, ResultDesc: "Success" });
 
-  // Find the transaction in the database
+  // Find the transaction
   let transaction = await Transaction.findOne({ checkoutRequestID: CheckoutRequestID });
   if (!transaction) {
     console.log(`⚠️ No transaction found for CheckoutRequestID: ${CheckoutRequestID}`);
@@ -160,30 +161,32 @@ app.post("/mpesa-callback", async (req, res) => {
 
     const phone = phoneItem.Value;
     const amount = amountItem.Value;
+    const plan = getPlanByAmount(amount);
 
-    // Determine the plan (use the one from transaction or fallback)
-    const plan = transaction.plan || getPlanByAmount(amount);
     if (!plan) {
       console.log(`⚠️ No plan found for amount ${amount}`);
       return;
     }
 
-    console.log(`💰 Payment confirmed: ${phone}, amount ${amount}, plan ${plan}`);
+    console.log(`💰 Payment confirmed: ${phone}, amount ${amount}, plan ${plan.profile}`);
 
-    // Update transaction status
+    // Update transaction
     transaction.status = 'completed';
     transaction.resultCode = ResultCode;
     transaction.resultDesc = ResultDesc;
     await transaction.save();
 
+    // 🚫 Router integration is disabled for now
+    /*
     try {
-      // Grant Wi-Fi access via router
-      await grantWifiAccess(phone, plan);
+      // Grant Wi-Fi access (include MAC address if available)
+      await grantWifiAccess(phone, plan, transaction.mac);
       console.log(`✅ Wi-Fi access granted for ${phone}`);
     } catch (routerError) {
       console.error(`❌ Failed to grant Wi-Fi access for ${phone}:`, routerError.message);
       // Optionally mark transaction for retry
     }
+    */
   } else {
     // Payment failed or cancelled
     console.log(`❌ Payment failed/cancelled: ${ResultDesc} (Code ${ResultCode})`);

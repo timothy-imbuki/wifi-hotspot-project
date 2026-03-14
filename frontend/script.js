@@ -1,5 +1,14 @@
 // frontend/script.js
-function buyPlan(price, plan) {
+
+// Set this to your backend URL (use relative if same origin, else full URL)
+const API_BASE_URL = window.location.origin; // Change if backend is on different domain
+
+// Get MAC and IP from URL query parameters (passed by MikroTik)
+const urlParams = new URLSearchParams(window.location.search);
+const mac = urlParams.get('mac') || 'unknown';
+const clientIp = urlParams.get('ip') || 'unknown';
+
+function buyPlan(price, planName) {
     let phone = prompt("Enter your phone number (e.g., 0712345678):");
 
     if (!phone) {
@@ -7,35 +16,33 @@ function buyPlan(price, plan) {
         return;
     }
 
-    // Basic validation for Kenyan phone numbers (starts with 07 or 01, 10 digits)
+    // Basic validation for Kenyan phone numbers (07xxxxxxxx or 01xxxxxxxx)
     const kenyanPhoneRegex = /^(07|01)\d{8}$/;
     if (!kenyanPhoneRegex.test(phone)) {
         alert("Please enter a valid Kenyan phone number starting with 07 or 01 (10 digits).");
         return;
     }
 
-    // Show loading status
     const statusDiv = document.getElementById("status");
-    statusDiv.innerHTML = "⏳ Sending payment request...";
+    statusDiv.innerHTML = '<div class="spinner"></div>⏳ Sending payment request...';
     statusDiv.style.color = "blue";
 
-    // Send request to backend
-    fetch("http://localhost:3000/stkpush", {
+    fetch(`${API_BASE_URL}/stkpush`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             phone: phone,
             amount: price,
-            plan: plan
+            plan: planName,
+            mac: mac,
+            ip: clientIp
         })
     })
     .then(res => res.json())
     .then(data => {
         console.log(data);
         if (data.status === "success") {
-            statusDiv.innerHTML = `✅ Payment request sent to ${phone} for ${plan} plan.<br>Check your phone for M-Pesa prompt.`;
+            statusDiv.innerHTML = `✅ Payment request sent to ${phone} for ${planName} plan.<br>Check your phone for M-Pesa prompt.`;
             statusDiv.style.color = "green";
             alert("STK Push sent! Please check your phone and enter your PIN.");
         } else {
