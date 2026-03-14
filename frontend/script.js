@@ -1,8 +1,8 @@
 // frontend/script.js
 
 // Set this to your backend URL (use relative if same origin, else full URL)
-const API_BASE_URL = window.location.origin; // Change if backend is on different domain
-
+//  
+const API_BASE_URL = 'https://wifi-hotspot-backend.onrender.com'; // backend URL (that has been
 // Get MAC and IP from URL query parameters (passed by MikroTik)
 const urlParams = new URLSearchParams(window.location.search);
 const mac = urlParams.get('mac') || 'unknown';
